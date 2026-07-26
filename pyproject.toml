@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unipredict"
+version = "0.1.0"
+description = "Универсальный класс для инференса ML-моделей с гибкими форматами входных данных"
+readme = "README.md"
+authors = [{name = "NewMrPotato"}]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.7"
+dependencies = [
+    "numpy",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+torch = ["torch"]
+tensorflow = ["tensorflow"]
+
+[project.urls]
+Homepage = "https://github.com/NewMrPotato/ml-uni-predict"
+
+[tool.setuptools.packages.find]
+where = ["."]
