@@ -18,11 +18,11 @@
 
 ## Overview and Motivation
 
-During a machine learning competition, I faced a common yet frustrating challenge: integrating a complex ensemble model into an existing application. The model was built using multiple frameworks—scikit-learn, PyTorch, and XGBoost—each requiring different data formats and preprocessing steps. Meanwhile, the integration target demanded flexibility in input formats: sometimes a dictionary, sometimes a JSON payload, sometimes a numpy array.
+During a machine learning competition, I faced a common yet frustrating challenge: integrating a complex ensemble model into an existing application. The model was built using multiple frameworks—scikit-learn, PyTorch, and XGBoost—each requiring different data formats and preprocessing steps. Meanwhile, the integration target demanded flexibility in input formats: sometimes a dictionary, sometimes a numpy array etc.
 
 The repeated code for data transformation, model prediction, and normalization quickly became unwieldy. Each new model required writing the same boilerplate code over and over. I realized there had to be a better way.
 
-This is how `UniPredict` was born—a universal wrapper that simplifies model inference by handling input data in any format and supporting models from any framework. Whether you're working with a single model or a complex ensemble, `UniPredict` provides a consistent, clean interface that "just works."
+This is how `UniPredict` was born—a universal wrapper that simplifies model inference by handling input data in any format and supporting models from any framework (almost). Whether you're working with a single model or a complex ensemble, `UniPredict` provides a consistent, clean interface that "just works."
 
 ## Key Features
 
