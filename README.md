@@ -1,230 +1,216 @@
-# UniPredict: Universal ML Model Predictor
+# FlexPredict
 
-![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)
-![versions](https://img.shields.io/badge/python-3.7%2B-blue)
+FlexPredict is a small, composable inference layer for tabular machine-learning models.
+It gives NumPy, scikit-learn-compatible, PyTorch, TensorFlow/Keras and custom models a
+consistent input and output contract, while allowing every model to keep its own schema
+and preprocessing pipeline.
 
+> FlexPredict 0.2 is an alpha redesign. It intentionally does not preserve the old
+> `unipredict` API.
 
-## Table of Contents
-- [Overview and Motivation](#overview-and-motivation)
-- [Key Features](#key-features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Code Examples](#code-examples)
-- [Ensemble Support](#ensemble-support)
-- [API Reference](#api-reference)
-- [Testing](#testing)
-- [Why UniPredict?](#why-unipredict)
-- [License](#license)
+## Why FlexPredict?
 
-## Overview and Motivation
+Application inputs rarely look exactly like a model matrix. A service may receive one
+JSON object, a dictionary of columns or a list of records, while different models in an
+ensemble require different normalization, devices and output handling. FlexPredict
+composes those concerns without becoming a training framework or a model server.
 
-During a machine learning competition, I faced a common yet frustrating challenge: integrating a complex ensemble model into an existing application. The model was built using multiple frameworks—scikit-learn, PyTorch, and XGBoost—each requiring different data formats and preprocessing steps. Meanwhile, the integration target demanded flexibility in input formats: sometimes a dictionary, sometimes a numpy array etc.
+Core properties:
 
-The repeated code for data transformation, model prediction, and normalization quickly became unwieldy. Each new model required writing the same boilerplate code over and over. I realized there had to be a better way.
-
-This is how `UniPredict` was born—a universal wrapper that simplifies model inference by handling input data in any format and supporting models from any framework (almost). Whether you're working with a single model or a complex ensemble, `UniPredict` provides a consistent, clean interface that "just works."
-
-## Key Features
-
-- **Universal Model Support**: Works with scikit-learn, PyTorch, TensorFlow/Keras, and any custom model with a `predict` method.
-- **Flexible Input Formats**: Accepts data as dictionaries, lists of dictionaries, structured arrays, or plain arrays—automatically converting them to the format your model expects.
-- **Built-in Normalization**: Handles data standardization with `mean` and `std` parameters, eliminating extra preprocessing steps.
-- **Ensemble Support**: Combine multiple predictors with strategies like weighted mean, median, max, or custom aggregation functions.
-- **Intelligent Engine Detection**: Automatically detects the framework (PyTorch, TensorFlow, scikit-learn) and selects the appropriate inference engine.
-- **Zero Boilerplate**: Create a predictor in one line and start making predictions immediately.
+- zero-configuration inference for array inputs;
+- named and schema-validated tabular inputs;
+- callable, sklearn-style and built-in preprocessing;
+- canonical prediction results with shape `(n_samples, n_outputs)`;
+- lazy optional dependencies for PyTorch and TensorFlow;
+- safe regression and classification ensembles;
+- global ensemble weights from lists, arrays or `.npy` files;
+- a registry for custom inference engines.
 
 ## Installation
 
-<!-- ### Basic Installation
-```bash
-pip install unipredict
-```
+Development install:
 
-### With Optional Dependencies
 ```bash
-pip install unipredict[torch]      # For PyTorch support
-pip install unipredict[tensorflow] # For TensorFlow support
-pip install unipredict[all]        # All dependencies
-``` -->
-
-### Development Installation
-```bash
-git clone https://github.com/NewMrPotato/ml-uni-predict.git
-cd ml-uni-predict
+git clone https://github.com/NewMrPotato/ml-flex-predict.git
+cd ml-flex-predict
 pip install -e .
 ```
 
-## Quick Start
+Optional frameworks:
 
-```python
-from unipredict import UniPredictor
-import numpy as np
-
-# Create a predictor for any model
-predictor = UniPredictor(
-    model=my_model,                    # sklearn, PyTorch, or TensorFlow
-    feature_names=['feat1', 'feat2']   # Required for flexible input formats
-)
-
-# Predict from a dictionary (single object)
-result = predictor.predict({'feat1': 1.0, 'feat2': 2.0})
-
-# Predict from a batch dictionary
-batch = {'feat1': [1.0, 2.0], 'feat2': [3.0, 4.0]}
-results = predictor.predict(batch)
-
-# Predict from a numpy array
-X = np.array([[1.0, 2.0], [3.0, 4.0]])
-results = predictor.predict(X)
+```bash
+pip install -e ".[sklearn]"
+pip install -e ".[torch]"
+pip install -e ".[tensorflow]"
+pip install -e ".[pandas]"
+pip install -e ".[dev]"
 ```
 
-## Code Examples
+The base package depends only on NumPy. Importing `flexpredict` does not import or
+require PyTorch, TensorFlow, pandas or scikit-learn.
 
-Full working examples for each framework are available in the [`examples/`](examples/) directory.
+## Quick start
 
-### PyTorch Example (with normalization)
+### Array input with no configuration
+
 ```python
-predictor = UniPredictor(
-    model=torch_model,
-    feature_names=['x1', 'x2', 'x3'],
-    mean=mean_values,
-    std=std_values,
-    device='cuda' if torch.cuda.is_available() else 'cpu'
-)
+from flexpredict import Predictor
 
-# Works with any input format
-result = predictor.predict({'x1': 1.2, 'x2': 2.3, 'x3': 0.5})
-result = predictor.predict(X_numpy_array)
-result = predictor.predict(list_of_dicts)
+predictor = Predictor(model)
+result = predictor.predict([[1.0, 2.0], [3.0, 4.0]])
+
+print(result.values)       # always a 2D NumPy array
+print(result.task)         # inferred for sklearn-compatible estimators
 ```
 
-### Scikit-learn, TensorFlow, and Custom Models
-Check out the dedicated examples:
-- [Scikit-learn example](examples/example_sklearn.py)
-- [TensorFlow example](examples/example_tensorflow.py)
-- [Custom model example](examples/example_custom_model.py)
-- [Cascade predictor example](examples/example_cascade.py)
+### Named input
 
-## Ensemble Support
-
-`UniPredict` provides flexible ensemble capabilities through `EnsemblePredictor`, supporting various aggregation strategies.
-
-### Weighted Ensemble
 ```python
-from unipredict import EnsemblePredictor
+predictor = Predictor(model, features=["age", "income", "score"])
+
+result = predictor.predict({
+    "age": 31,
+    "income": 150_000,
+    "score": 0.82,
+})
+
+print(result.single())
+```
+
+The same predictor accepts a dictionary of columns or a list of records:
+
+```python
+predictor.predict({
+    "age": [31, 45],
+    "income": [150_000, 90_000],
+    "score": [0.82, 0.61],
+})
+
+predictor.predict([
+    {"age": 31, "income": 150_000, "score": 0.82},
+    {"age": 45, "income": 90_000, "score": 0.61},
+])
+```
+
+## Schema-aware input
+
+Use an explicit schema only when validation is useful:
+
+```python
+from flexpredict import FeatureSpec, InputSchema, Predictor
+
+schema = InputSchema((
+    FeatureSpec("age", int, validators=(lambda value: 18 <= value <= 120,)),
+    FeatureSpec("income", float, validators=(lambda value: value >= 0,)),
+    FeatureSpec("score", float, default=0.5),
+))
+
+predictor = Predictor(model, schema=schema)
+result = predictor.predict({"age": "31", "income": 150_000})
+```
+
+By default, values are coerced to their declared types and extra fields are rejected.
+Errors identify the invalid or missing feature before the model is called.
+
+## Preprocessing
+
+FlexPredict accepts a callable or an object with `transform(X)`:
+
+```python
+from flexpredict import Predictor, Standardizer
+
+predictor = Predictor(
+    model,
+    features=["x1", "x2", "x3"],
+    preprocessor=Standardizer(
+        mean=[10.0, 20.0, 30.0],
+        std=[2.0, 5.0, 10.0],
+    ),
+)
+```
+
+Each member of an ensemble can use a different schema and preprocessor.
+
+## Ensembles and weights files
+
+`aggregation_weights` are coefficients controlling the contribution of each model.
+They are not the trained parameters inside a neural network.
+
+```python
+from flexpredict import EnsemblePredictor
 
 ensemble = EnsemblePredictor(
-    [predictor1, predictor2, predictor3],
-    weights=[0.5, 0.3, 0.2],
-    aggregation='weighted_mean'
+    predictors=[predictor_a, predictor_b, predictor_c],
+    aggregation="weighted_mean",
+    aggregation_weights="models/global_weights.npy",
 )
 
-# Same flexible input format as UniPredictor
-result = ensemble.predict({'feat1': 1.0, 'feat2': 2.0})
+result = ensemble.predict(data)
 ```
 
-### Aggregation Strategies
-- `'weighted_mean'` — Weighted average with custom weights
-- `'mean'` — Simple average
-- `'median'` — Median (robust to outliers)
-- `'max'` — Maximum value
-- `'min'` — Minimum value
-- Custom function — Your own aggregation logic
+Weights files are loaded with `np.load(path, allow_pickle=False)`. The array must be
+one-dimensional, contain one finite non-negative weight per predictor and have a positive
+sum. Weights are normalized automatically. A Python list or NumPy array can be passed
+instead of a file path.
 
-### Custom Aggregation Example
+Supported regression aggregations are `mean`, `weighted_mean`, `median`, `min`, `max`
+and a callable. Classification probabilities can be averaged after verifying class
+metadata. Class labels require the explicit `voting` strategy.
+
+## Classification
+
 ```python
-def geometric_mean(predictions, epsilon=1e-8):
-    log_preds = np.log(np.abs(predictions) + epsilon)
-    return np.exp(np.mean(log_preds, axis=0))
-
-ensemble = EnsemblePredictor(
-    [predictor1, predictor2, predictor3],
-    aggregation=geometric_mean
+predictor = Predictor(
+    classifier,
+    features=["age", "income", "score"],
+    task="classification",  # inferred for sklearn classifiers
 )
+
+labels = predictor.predict(data)
+probabilities = predictor.predict_proba(data)
+
+print(labels.values)
+print(probabilities.values)
+print(probabilities.classes)
 ```
 
-## API Reference
+For a PyTorch or Keras model whose regular forward output already contains
+probabilities, configure `output_kind="probabilities"`.
 
-### UniPredictor
+## Engine options
+
+Framework-specific runtime settings stay grouped and optional:
+
 ```python
-UniPredictor(
-    model: Any,                          # Trained model
-    config: Optional[ModelConfig] = None, # Configuration object
-    **kwargs                             # Optional: feature_names, mean, std, device
+predictor = Predictor(
+    torch_model,
+    features=["x1", "x2", "x3"],
+    task="regression",
+    engine_options={
+        "device": "cuda",
+        "dtype": "float32",
+    },
 )
 ```
 
-**Key Parameters:**
-- `feature_names` (required): List of feature names
-- `mean` (optional): Array of mean values for normalization
-- `std` (optional): Array of standard deviation values for normalization
-- `device` (optional): 'cpu' or 'cuda' (for PyTorch models)
+Unknown engine options are rejected instead of being silently ignored.
 
-**Supported Input Formats:**
-- Dictionary (single object): `{'feat1': 1.0, 'feat2': 2.0}`
-- Dictionary of arrays (batch): `{'feat1': [1.0, 2.0], 'feat2': [3.0, 4.0]}`
-- List of dictionaries: `[{'feat1': 1.0, 'feat2': 2.0}, ...]`
-- Structured numpy array: `np.array([(1.0, 2.0)], dtype=[('feat1', float), ('feat2', float)])`
-- Plain numpy array: `np.array([[1.0, 2.0], [3.0, 4.0]])`
+## Development
 
-### EnsemblePredictor
-```python
-EnsemblePredictor(
-    predictors: List[Callable],          # List of predictors
-    weights: Optional[List[float]] = None,# Optional weights
-    aggregation: Union[str, Callable] = 'weighted_mean',
-    normalize_weights: bool = True
-)
+```bash
+python -m pytest
+python -m compileall -q flexpredict tests examples
 ```
 
-## Testing
+The fast unit suite requires only NumPy and pytest. Framework integration suites are
+kept separate so that schema and ensemble tests do not require heavy optional packages.
 
-The project uses `pytest` for comprehensive testing. Tests cover all core components:
+## Security
 
-- **Processors**: Input data conversion for all supported formats.
-- **Engines**: Inference engines for sklearn, PyTorch, and TensorFlow.
-- **Core**: Full `UniPredictor` functionality with normalization and format handling.
-- **Ensemble**: All aggregation strategies, custom functions, and edge cases.
-
-### Running Tests Locally
-
-1. **Generate test models** (required before running tests):
-   ```bash
-   python generate_test_models.py
-   ```
-   This creates dummy models for sklearn, PyTorch, and TensorFlow in the `test_models/` directory.
-
-2. **Install development dependencies** (if not already installed):
-   ```bash
-   pip install pytest pytest-cov
-   ```
-
-3. **Run tests**:
-   ```bash
-   pytest tests/ -v
-   ```
-
-4. **With coverage report**:
-   ```bash
-   pytest tests/ --cov=unipredict --cov-report=html
-   ```
-
-
-## Why UniPredict?
-
-| Feature | UniPredict | ml-wrappers | Manual Approach |
-|---------|------------|-------------|-----------------|
-| **Input Flexibility** | ✅ Dictionary, array, list | ✅ DatasetWrapper | ❌ Custom code needed |
-| **Multi-Framework** | ✅ sklearn, PyTorch, TF | ✅ Many frameworks | ❌ Inconsistent APIs |
-| **Ensemble Support** | ✅ Built-in | ❌ Not supported | ❌ Complex implementation |
-| **Normalization** | ✅ Built-in | ❌ Manual | ❌ Manual |
-| **One-Line Setup** | ✅ Yes | ❌ Multiple steps | ❌ Multiple steps |
-| **Zero Boilerplate** | ✅ Yes | ⚠️ Some needed | ❌ Much needed |
+Only load model artifacts and preprocessing objects from trusted sources. Python pickle,
+joblib and some framework serialization formats may execute code while loading. NumPy
+ensemble-weight files are always loaded with pickle support disabled.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Made with ❤️ for data scientists and ML engineers**
+MIT
