@@ -244,6 +244,9 @@ kept separate so that schema and ensemble tests do not require heavy optional pa
 The current fast suite enforces at least 85% coverage; this threshold will increase as
 the optional-framework integration matrix grows.
 
+GitHub Actions additionally installs and tests the `sklearn`, `torch` and `tensorflow`
+extras in isolated Python 3.11 jobs.
+
 ## Security
 
 Only load model artifacts and preprocessing objects from trusted sources. Python pickle,

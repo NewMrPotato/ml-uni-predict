@@ -60,6 +60,11 @@ flexpredict = ["py.typed"]
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+markers = [
+    "sklearn: integration tests requiring scikit-learn and joblib",
+    "torch: integration tests requiring PyTorch",
+    "tensorflow: integration tests requiring TensorFlow/Keras",
+]
 
 [tool.ruff]
 target-version = "py310"
