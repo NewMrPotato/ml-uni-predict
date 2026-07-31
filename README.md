@@ -150,8 +150,14 @@ result = ensemble.predict(data)
 
 Weights files are loaded with `np.load(path, allow_pickle=False)`. The array must be
 one-dimensional, contain one finite non-negative weight per predictor and have a positive
-sum. Weights are normalized automatically. A Python list or NumPy array can be passed
-instead of a file path.
+sum. Weights are normalized automatically and exposed as the read-only
+`ensemble.aggregation_weights` array in predictor order. A Python list or NumPy array can
+be passed instead of a file path.
+
+Every member receives the original input independently, so its schema can select and order
+features for that model. Members must still agree on task, output kind, batch shape and
+classification classes before aggregation. Errors identify the failing member by index and
+name. Majority-vote ties are deterministic: the prediction from the earliest member wins.
 
 ## Loading model artifacts
 
@@ -246,6 +252,11 @@ the optional-framework integration matrix grows.
 
 GitHub Actions additionally installs and tests the `sklearn`, `torch` and `tensorflow`
 extras in isolated Python 3.11 jobs.
+
+See the [contribution guide](https://github.com/NewMrPotato/ml-flex-predict/blob/main/CONTRIBUTING.md)
+for the development workflow and the
+[release checklist](https://github.com/NewMrPotato/ml-flex-predict/blob/main/docs/release-checklist.md)
+for the alpha-release gate.
 
 ## Security
 

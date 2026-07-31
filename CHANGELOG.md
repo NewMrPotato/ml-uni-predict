@@ -19,12 +19,15 @@ series, breaking changes are called out explicitly.
 - Lazy joblib, Keras, complete PyTorch and PyTorch state-dict loaders.
 - Cross-platform CI, static typing, linting, package builds and coverage enforcement.
 - Metadata inference through the modern sklearn Tags API with a legacy fallback.
+- Named ensemble-member errors, deterministic voting ties and read-only normalized weights.
+- Built-wheel installation smoke test in CI.
 
 ### Changed
 
 - Distribution renamed from `unipredict` to `flexpredict`.
 - Packaging now uses `pyproject.toml` as its only source of metadata.
 - Framework-specific settings are grouped in `engine_options`.
+- Package metadata reads its version from `flexpredict.__version__` to prevent drift.
 
 ### Removed
 
