@@ -37,17 +37,41 @@ class PredictionResult:
             )
         if values.shape[0] == 0 or values.shape[1] == 0:
             raise OutputValidationError("PredictionResult.values cannot be empty.")
+        if np.issubdtype(values.dtype, np.number) and not np.all(np.isfinite(values)):
+            raise OutputValidationError("PredictionResult.values must contain only finite values.")
+        if self.is_single and values.shape[0] != 1:
+            raise OutputValidationError(
+                "is_single=True requires PredictionResult.values to contain one sample."
+            )
         object.__setattr__(self, "values", values)
 
         if self.task not in {"regression", "classification", "unknown"}:
             raise OutputValidationError(f"Unknown prediction task: {self.task!r}.")
         if self.output_kind not in {"values", "labels", "probabilities", "logits"}:
             raise OutputValidationError(f"Unknown output kind: {self.output_kind!r}.")
+        if self.output_kind in {"probabilities", "logits"} and not np.issubdtype(
+            values.dtype, np.number
+        ):
+            raise OutputValidationError(
+                f"{self.output_kind.capitalize()} must contain numeric values."
+            )
+        if self.output_kind == "probabilities" and (
+            np.any(values < -1e-12) or np.any(values > 1.0 + 1e-12)
+        ):
+            raise OutputValidationError("Probabilities must be between 0 and 1.")
 
         if self.classes is not None:
             classes = np.asarray(self.classes)
             if classes.ndim != 1:
                 raise OutputValidationError("classes must be a one-dimensional array.")
+            if classes.size == 0:
+                raise OutputValidationError("classes cannot be empty.")
+            if np.issubdtype(classes.dtype, np.number) and not np.all(
+                np.isfinite(classes)
+            ):
+                raise OutputValidationError("classes must contain only finite values.")
+            if _contains_duplicates(classes):
+                raise OutputValidationError("classes must contain unique values.")
             if self.output_kind in {"probabilities", "logits"} and len(classes) != values.shape[1]:
                 raise OutputValidationError(
                     "The number of classes must match the number of output columns."
@@ -74,3 +98,19 @@ class PredictionResult:
             return row[0].item() if hasattr(row[0], "item") else row[0]
         return row.copy()
 
+
+def _contains_duplicates(values: np.ndarray) -> bool:
+    items = values.tolist()
+    return any(
+        _labels_equal(value, previous)
+        for index, value in enumerate(items)
+        for previous in items[:index]
+    )
+
+
+def _labels_equal(left: Any, right: Any) -> bool:
+    try:
+        result = left == right
+        return bool(result) if np.isscalar(result) else bool(np.all(result))
+    except (TypeError, ValueError):
+        return False

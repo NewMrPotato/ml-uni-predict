@@ -33,6 +33,10 @@ class InferenceError(FlexPredictError):
     """A model failed during inference."""
 
 
+class EnsembleInferenceError(InferenceError):
+    """An identified ensemble member failed while producing a prediction."""
+
+
 class OutputValidationError(FlexPredictError):
     """A model or aggregator returned an invalid output."""
 
@@ -43,4 +47,3 @@ class UnsupportedOutputError(FlexPredictError):
 
 class EnsembleCompatibilityError(FlexPredictError):
     """Predictions cannot be combined safely."""
-

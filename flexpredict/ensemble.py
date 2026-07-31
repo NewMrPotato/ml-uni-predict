@@ -11,6 +11,7 @@ import numpy as np
 from .exceptions import (
     ConfigurationError,
     EnsembleCompatibilityError,
+    EnsembleInferenceError,
     OutputValidationError,
 )
 from .result import PredictionResult
@@ -37,21 +38,39 @@ class EnsemblePredictor:
                 raise ConfigurationError("Every ensemble member must define predict(data).")
         self.aggregation = aggregation
         self.name = name
-        self.weights = self._prepare_weights(aggregation_weights)
+        self._weights = self._prepare_weights(aggregation_weights)
         if isinstance(aggregation, str):
             valid = {"mean", "weighted_mean", "median", "min", "max", "voting"}
             if aggregation not in valid:
                 raise ConfigurationError(
                     f"Unknown aggregation {aggregation!r}; expected one of {sorted(valid)}."
                 )
-            if aggregation == "weighted_mean" and self.weights is None:
-                self.weights = np.full(len(self.predictors), 1.0 / len(self.predictors))
-            if aggregation != "weighted_mean" and self.weights is not None:
+            if aggregation == "weighted_mean" and self._weights is None:
+                self._weights = self._freeze_weights(
+                    np.full(len(self.predictors), 1.0 / len(self.predictors))
+                )
+            if aggregation != "weighted_mean" and self._weights is not None:
                 raise ConfigurationError(
                     "aggregation_weights can be used only with aggregation='weighted_mean'."
                 )
         elif not callable(aggregation):
             raise ConfigurationError("aggregation must be a supported string or callable.")
+        elif self._weights is not None:
+            raise ConfigurationError(
+                "aggregation_weights cannot be used with a custom aggregation callable."
+            )
+
+    @property
+    def aggregation_weights(self) -> np.ndarray | None:
+        """Normalized, read-only global weights in predictor order."""
+
+        return self._weights
+
+    @property
+    def weights(self) -> np.ndarray | None:
+        """Alias for :attr:`aggregation_weights`."""
+
+        return self._weights
 
     def predict(self, data: Any) -> PredictionResult:
         return self._predict_with("predict", data)
@@ -62,15 +81,21 @@ class EnsemblePredictor:
     def _predict_with(self, method_name: str, data: Any) -> PredictionResult:
         results: list[PredictionResult] = []
         for index, predictor in enumerate(self.predictors):
+            member = self._member_description(index, predictor)
             method = getattr(predictor, method_name, None)
             if not callable(method):
                 raise EnsembleCompatibilityError(
-                    f"Predictor {index} does not support {method_name}()."
+                    f"{member} does not support {method_name}()."
                 )
-            result = method(data)
+            try:
+                result = method(data)
+            except Exception as exc:
+                raise EnsembleInferenceError(
+                    f"{member} failed during {method_name}(): {exc}"
+                ) from exc
             if not isinstance(result, PredictionResult):
                 raise EnsembleCompatibilityError(
-                    f"Predictor {index} returned {type(result).__name__}, "
+                    f"{member} returned {type(result).__name__}, "
                     "expected PredictionResult."
                 )
             results.append(result)
@@ -105,6 +130,11 @@ class EnsemblePredictor:
                     f"Predictor {index} returned shape {result.values.shape}, "
                     f"expected {reference.values.shape}."
                 )
+            if result.is_single != reference.is_single:
+                raise EnsembleCompatibilityError(
+                    f"Predictor {index} has is_single={result.is_single}, "
+                    f"expected {reference.is_single}."
+                )
             aligned.append(self._align_classes(result, reference, index))
         return aligned
 
@@ -122,7 +152,12 @@ class EnsemblePredictor:
             )
         if np.array_equal(reference.classes, result.classes):
             return result
-        if set(reference.classes.tolist()) != set(result.classes.tolist()):
+        reference_classes = reference.classes.tolist()
+        result_classes = result.classes.tolist()
+        if not all(
+            any(_labels_equal(expected, candidate) for candidate in result_classes)
+            for expected in reference_classes
+        ):
             raise EnsembleCompatibilityError(
                 f"Predictor {index} uses a different set of classes."
             )
@@ -130,8 +165,14 @@ class EnsemblePredictor:
             raise EnsembleCompatibilityError(
                 "Class order can be aligned only for probability or logit outputs."
             )
-        positions = {value: pos for pos, value in enumerate(result.classes.tolist())}
-        order = [positions[value] for value in reference.classes.tolist()]
+        order = [
+            next(
+                position
+                for position, candidate in enumerate(result_classes)
+                if _labels_equal(expected, candidate)
+            )
+            for expected in reference_classes
+        ]
         return PredictionResult(
             values=result.values[:, order],
             task=result.task,
@@ -152,7 +193,7 @@ class EnsemblePredictor:
             values = np.mean(stacked, axis=0)
         elif self.aggregation == "weighted_mean":
             self._require_numeric(stacked)
-            values = np.average(stacked, axis=0, weights=self.weights)
+            values = np.average(stacked, axis=0, weights=self._weights)
         elif self.aggregation == "median":
             self._require_numeric(stacked)
             values = np.median(stacked, axis=0)
@@ -210,7 +251,19 @@ class EnsemblePredictor:
         total = float(array.sum())
         if total <= 0:
             raise ConfigurationError("Aggregation weights must have a positive sum.")
-        return array / total
+        return self._freeze_weights(array / total)
+
+    @staticmethod
+    def _freeze_weights(weights: np.ndarray) -> np.ndarray:
+        weights.setflags(write=False)
+        return weights
+
+    @staticmethod
+    def _member_description(index: int, predictor: Any) -> str:
+        name = getattr(predictor, "name", None)
+        if not isinstance(name, str) or not name:
+            name = type(predictor).__name__
+        return f"Ensemble member {index} ({name!r})"
 
     @staticmethod
     def _require_numeric(stacked: np.ndarray) -> None:
@@ -223,6 +276,15 @@ class EnsemblePredictor:
 def _majority_vote(labels: np.ndarray) -> np.ndarray:
     output: list[Any] = []
     for sample in labels.T:
-        values, counts = np.unique(sample, return_counts=True)
-        output.append(values[np.argmax(counts)])
+        values = sample.tolist()
+        counts = [sum(_labels_equal(value, other) for other in values) for value in values]
+        output.append(values[int(np.argmax(counts))])
     return np.asarray(output)
+
+
+def _labels_equal(left: Any, right: Any) -> bool:
+    try:
+        result = left == right
+        return bool(result) if np.isscalar(result) else bool(np.all(result))
+    except (TypeError, ValueError):
+        return False

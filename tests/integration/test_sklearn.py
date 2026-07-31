@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from flexpredict import Predictor
+from flexpredict import EnsemblePredictor, Predictor
 
 sklearn = pytest.importorskip("sklearn")
 joblib = pytest.importorskip("joblib")
@@ -50,3 +50,20 @@ def test_joblib_artifact_round_trip(tmp_path):
     predictor = Predictor.from_file(path, features=["x"])
 
     assert predictor.predict({"x": 2.0}).single() == pytest.approx(4.0)
+
+
+def test_sklearn_ensemble_members_can_use_different_feature_orders():
+    values = np.array([[0.0, 0.0], [1.0, 2.0], [2.0, 1.0], [3.0, 3.0]])
+    targets = 2.0 * values[:, 0] + 3.0 * values[:, 1]
+    direct = LinearRegression().fit(values, targets)
+    reversed_order = LinearRegression().fit(values[:, ::-1], targets)
+    ensemble = EnsemblePredictor(
+        [
+            Predictor(direct, features=["x1", "x2"], name="direct"),
+            Predictor(reversed_order, features=["x2", "x1"], name="reversed"),
+        ]
+    )
+
+    result = ensemble.predict({"x1": 4.0, "x2": 5.0})
+
+    assert result.single() == pytest.approx(23.0)

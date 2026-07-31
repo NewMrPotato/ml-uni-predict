@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from flexpredict import Predictor
+from flexpredict import EnsemblePredictor, Predictor
 
 torch = pytest.importorskip("torch")
 
@@ -50,3 +50,25 @@ def test_torch_state_dict_round_trip(tmp_path):
     )
 
     assert predictor.predict({"x1": 1.0, "x2": 2.0}).single() == pytest.approx(8.0)
+
+
+def test_torch_and_generic_models_form_a_heterogeneous_ensemble():
+    class ReversedNumpyModel:
+        _estimator_type = "regressor"
+
+        def predict(self, values):
+            array = np.asarray(values)
+            return 3.0 * array[:, 0] + 2.0 * array[:, 1]
+
+    ensemble = EnsemblePredictor(
+        [
+            Predictor(make_model(), features=["x1", "x2"], task="regression"),
+            Predictor(ReversedNumpyModel(), features=["x2", "x1"]),
+        ],
+        aggregation="weighted_mean",
+        aggregation_weights=[0.25, 0.75],
+    )
+
+    result = ensemble.predict({"x1": [1.0, 2.0], "x2": [2.0, 1.0]})
+
+    assert np.allclose(result.values, [[8.0], [7.0]])

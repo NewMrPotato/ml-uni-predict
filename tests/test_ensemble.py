@@ -6,6 +6,7 @@ import pytest
 from flexpredict import (
     ConfigurationError,
     EnsembleCompatibilityError,
+    EnsembleInferenceError,
     EnsemblePredictor,
     PredictionResult,
     Predictor,
@@ -85,6 +86,8 @@ def test_ensemble_loads_global_weights_from_npy(tmp_path: Path):
     )
 
     assert np.allclose(ensemble.weights, [0.8, 0.2])
+    assert ensemble.aggregation_weights is ensemble.weights
+    assert ensemble.weights.flags.writeable is False
     assert ensemble.predict([[0]]).single() == 12.0
 
 
@@ -142,6 +145,15 @@ def test_voting_ensemble_aggregates_labels():
     assert result.values[:, 0].tolist() == ["no", "yes"]
 
 
+def test_voting_ties_are_resolved_by_predictor_order():
+    first = ProbabilityPredictor([[0.8, 0.2]], ["no", "yes"])
+    second = ProbabilityPredictor([[0.2, 0.8]], ["no", "yes"])
+
+    result = EnsemblePredictor([first, second], aggregation="voting").predict(None)
+
+    assert result.single() == "no"
+
+
 def test_ensemble_rejects_incompatible_shapes():
     first = ProbabilityPredictor([[0.8, 0.2]], ["no", "yes"])
     second = ProbabilityPredictor([[0.7, 0.2, 0.1]], ["a", "b", "c"])
@@ -185,6 +197,42 @@ def test_ensemble_constructor_validates_members_and_aggregation():
         make_regression_ensemble(aggregation="unknown")
     with pytest.raises(ConfigurationError, match="only with"):
         make_regression_ensemble(aggregation="mean", aggregation_weights=[1, 1])
+    with pytest.raises(ConfigurationError, match="custom aggregation"):
+        make_regression_ensemble(
+            aggregation=lambda values: values.mean(axis=0),
+            aggregation_weights=[1, 1],
+        )
+
+
+def test_ensemble_identifies_a_failing_member():
+    class FailingPredictor:
+        name = "broken-model"
+
+        def predict(self, data):
+            raise RuntimeError("device unavailable")
+
+    ensemble = EnsemblePredictor(
+        [Predictor(ConstantRegressor(10), name="healthy"), FailingPredictor()]
+    )
+
+    with pytest.raises(EnsembleInferenceError, match="broken-model.*device unavailable"):
+        ensemble.predict([[0]])
+
+
+def test_ensemble_rejects_inconsistent_single_input_metadata():
+    class StaticPredictor:
+        def __init__(self, is_single):
+            self.is_single = is_single
+
+        def predict(self, data):
+            return PredictionResult(
+                np.array([[1.0]]), task="regression", is_single=self.is_single
+            )
+
+    ensemble = EnsemblePredictor([StaticPredictor(True), StaticPredictor(False)])
+
+    with pytest.raises(EnsembleCompatibilityError, match="is_single"):
+        ensemble.predict(None)
 
 
 def test_custom_aggregation_must_preserve_prediction_shape():
