@@ -185,13 +185,31 @@ def create_engine(
 
 
 def infer_model_metadata(model: Any) -> tuple[str, np.ndarray | None]:
-    estimator_type = getattr(model, "_estimator_type", None)
+    estimator_type = _infer_estimator_type(model)
+    classes = getattr(model, "classes_", None)
+    class_array = None if classes is None else np.asarray(classes)
     if estimator_type == "classifier":
-        classes = getattr(model, "classes_", None)
-        return "classification", None if classes is None else np.asarray(classes)
+        return "classification", class_array
     if estimator_type == "regressor":
         return "regression", None
-    return "unknown", None
+    return "unknown", class_array
+
+
+def _infer_estimator_type(model: Any) -> str | None:
+    """Read modern sklearn tags without making sklearn a base dependency."""
+
+    tags_method = getattr(model, "__sklearn_tags__", None)
+    if callable(tags_method):
+        try:
+            estimator_type = getattr(tags_method(), "estimator_type", None)
+            if estimator_type in {"classifier", "regressor"}:
+                return estimator_type
+        except Exception:
+            # Third-party sklearn-compatible estimators occasionally expose partial
+            # tag implementations. The legacy attribute remains a useful fallback.
+            pass
+    estimator_type = getattr(model, "_estimator_type", None)
+    return estimator_type if estimator_type in {"classifier", "regressor"} else None
 
 
 def normalize_output(raw: Any, *, n_samples: int) -> np.ndarray:

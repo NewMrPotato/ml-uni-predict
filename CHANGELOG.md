@@ -18,6 +18,7 @@ series, breaking changes are called out explicitly.
 - Global aggregation weights from lists, NumPy arrays and safe `.npy` files.
 - Lazy joblib, Keras, complete PyTorch and PyTorch state-dict loaders.
 - Cross-platform CI, static typing, linting, package builds and coverage enforcement.
+- Metadata inference through the modern sklearn Tags API with a legacy fallback.
 
 ### Changed
 
@@ -30,4 +31,3 @@ series, breaking changes are called out explicitly.
 - The old `UniPredictor`, `ModelConfig`, `mean/std` constructor parameters and legacy
   output squeezing behavior.
 - Mandatory imports of PyTorch and TensorFlow.
-

@@ -38,6 +38,29 @@ def test_auto_detection_uses_generic_engine_for_predict_models():
     assert isinstance(create_engine(Model()), GenericEngine)
 
 
+def test_modern_sklearn_tags_drive_metadata_without_legacy_attribute():
+    class Tags:
+        estimator_type = "classifier"
+
+    class TaggedClassifier:
+        classes_ = np.array(["negative", "positive"])
+
+        def __sklearn_tags__(self):
+            return Tags()
+
+        def predict(self, values):
+            return np.full(len(values), "positive")
+
+        def predict_proba(self, values):
+            return np.tile([0.25, 0.75], (len(values), 1))
+
+    predictor = Predictor(TaggedClassifier())
+    result = predictor.predict_proba([[1], [2]])
+
+    assert predictor.task == "classification"
+    assert result.classes.tolist() == ["negative", "positive"]
+
+
 def test_unknown_engine_has_clear_error():
     with pytest.raises(ConfigurationError, match="Unknown engine"):
         Predictor(Model(), engine="missing")
