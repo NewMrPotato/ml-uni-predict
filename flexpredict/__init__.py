@@ -15,6 +15,7 @@ from .exceptions import (
     UnexpectedFeatureError,
     UnsupportedOutputError,
 )
+from .loading import load_model, load_torch_state_dict
 from .predictor import Predictor
 from .preprocessing import Standardizer
 from .result import PredictionResult
@@ -41,7 +42,8 @@ __all__ = [
     "UnexpectedFeatureError",
     "UnsupportedOutputError",
     "register_engine",
+    "load_model",
+    "load_torch_state_dict",
 ]
 
 __version__ = "0.2.0"
-

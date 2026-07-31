@@ -153,6 +153,39 @@ one-dimensional, contain one finite non-negative weight per predictor and have a
 sum. Weights are normalized automatically. A Python list or NumPy array can be passed
 instead of a file path.
 
+## Loading model artifacts
+
+Complete sklearn/joblib and Keras artifacts can be turned into predictors directly:
+
+```python
+sklearn_predictor = Predictor.from_file(
+    "models/random_forest.joblib",
+    features=["age", "income", "score"],
+)
+
+keras_predictor = Predictor.from_file(
+    "models/network.keras",
+    features=["age", "income", "score"],
+)
+```
+
+PyTorch state dicts need a model factory because weights alone do not describe the
+Python architecture:
+
+```python
+torch_predictor = Predictor.from_torch_weights(
+    "models/network_weights.pth",
+    model_factory=lambda: MyNetwork(input_size=3),
+    features=["age", "income", "score"],
+    task="regression",
+    engine_options={"device": "cuda", "dtype": "float32"},
+)
+```
+
+PyTorch weights are loaded with `weights_only=True`. A complete trusted PyTorch model can
+be loaded explicitly with `loader="torch_model"`; `.pt` and `.pth` are never guessed
+because the same extensions are commonly used for incompatible artifact types.
+
 Supported regression aggregations are `mean`, `weighted_mean`, `median`, `min`, `max`
 and a callable. Classification probabilities can be averaged after verifying class
 metadata. Class labels require the explicit `voting` strategy.
@@ -199,11 +232,17 @@ Unknown engine options are rejected instead of being silently ignored.
 
 ```bash
 python -m pytest
+python -m pytest --cov=flexpredict --cov-fail-under=85
+python -m ruff check flexpredict tests examples
+python -m mypy flexpredict
 python -m compileall -q flexpredict tests examples
+python -m build
 ```
 
 The fast unit suite requires only NumPy and pytest. Framework integration suites are
 kept separate so that schema and ensemble tests do not require heavy optional packages.
+The current fast suite enforces at least 85% coverage; this threshold will increase as
+the optional-framework integration matrix grows.
 
 ## Security
 

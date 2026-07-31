@@ -70,7 +70,8 @@ class EnsemblePredictor:
             result = method(data)
             if not isinstance(result, PredictionResult):
                 raise EnsembleCompatibilityError(
-                    f"Predictor {index} returned {type(result).__name__}, expected PredictionResult."
+                    f"Predictor {index} returned {type(result).__name__}, "
+                    "expected PredictionResult."
                 )
             results.append(result)
 

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any, cast
-
-import numpy as np
 
 from .engines import (
     InferenceEngine,
@@ -13,6 +13,7 @@ from .engines import (
     normalize_output,
 )
 from .exceptions import ConfigurationError
+from .loading import LoaderName
 from .preprocessing import apply_preprocessor
 from .result import OutputKind, PredictionResult, Task
 from .schema import InputSchema, process_untyped_array
@@ -63,6 +64,49 @@ class Predictor:
         else:
             self.output_kind = output_kind
         self._validate_semantics()
+
+    @classmethod
+    def from_file(
+        cls,
+        path: str | Path,
+        *,
+        loader: LoaderName = "auto",
+        loader_options: dict[str, Any] | None = None,
+        **predictor_options: Any,
+    ) -> Predictor:
+        """Load a complete model artifact and create a predictor."""
+
+        from .loading import load_model
+
+        model = load_model(path, loader=loader, loader_options=loader_options)
+        return cls(model, **predictor_options)
+
+    @classmethod
+    def from_torch_weights(
+        cls,
+        weights_path: str | Path,
+        model_factory: Callable[[], Any],
+        *,
+        strict: bool = True,
+        state_dict_key: str | None = None,
+        load_options: dict[str, Any] | None = None,
+        **predictor_options: Any,
+    ) -> Predictor:
+        """Create a PyTorch model from a factory and apply a state dict."""
+
+        from .loading import load_torch_state_dict
+
+        engine_options = dict(predictor_options.get("engine_options") or {})
+        model = load_torch_state_dict(
+            model_factory,
+            weights_path,
+            strict=strict,
+            state_dict_key=state_dict_key,
+            map_location=engine_options.get("device", "cpu"),
+            load_options=load_options,
+        )
+        predictor_options["engine"] = "torch"
+        return cls(model, **predictor_options)
 
     def predict(self, data: Any) -> PredictionResult:
         batch = self._prepare(data)

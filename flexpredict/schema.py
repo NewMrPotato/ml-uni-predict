@@ -246,7 +246,10 @@ class InputSchema:
             )
 
         rows = [
-            [feature.validate(row[index], coerce=self.coerce) for index, feature in enumerate(self.features)]
+            [
+                feature.validate(row[index], coerce=self.coerce)
+                for index, feature in enumerate(self.features)
+            ]
             for row in array
         ]
         return InputBatch(np.asarray(rows), self.feature_names, is_single)
@@ -301,4 +304,3 @@ def _pandas_to_supported(data: Any) -> Any:
     if name == "Series":
         return data.to_dict()
     raise InputValidationError(f"Unsupported pandas object: {name}.")
-
