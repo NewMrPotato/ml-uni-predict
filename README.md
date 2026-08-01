@@ -121,6 +121,11 @@ from a named input and passed to the model in the declared order; unrelated fiel
 ignored. This allows one shared request to feed ensemble members with different feature
 subsets. Use an explicit `InputSchema` when extra fields must be rejected.
 
+Pandas `DataFrame` input remains a DataFrame for generic and sklearn-compatible models.
+Column names, their declared order and pandas dtypes are preserved, so sklearn pipelines
+using `ColumnTransformer` with named columns or dtype selectors continue to work. PyTorch
+and TensorFlow engines convert DataFrame input to a NumPy matrix before tensor inference.
+
 ## Schema-aware input
 
 Use an explicit schema only when validation is useful:
@@ -263,6 +268,9 @@ predictor = Predictor(
 ```
 
 Unknown engine options are rejected instead of being silently ignored.
+
+Custom `InferenceEngine` implementations receive NumPy input by default. An engine that
+intentionally supports pandas semantics can declare `preserves_dataframe = True`.
 
 ## Development
 

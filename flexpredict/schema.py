@@ -81,12 +81,14 @@ class FeatureSpec:
 
 @dataclass(frozen=True, slots=True)
 class InputBatch:
-    values: np.ndarray
+    """Validated 2D input, retaining a pandas DataFrame when names carry semantics."""
+
+    values: Any
     feature_names: tuple[str, ...]
     is_single: bool
 
     def __post_init__(self) -> None:
-        values = np.asarray(self.values)
+        values = self.values if _is_pandas_dataframe(self.values) else np.asarray(self.values)
         if values.ndim != 2:
             raise InputValidationError(
                 f"Input batch must be 2D, received shape {values.shape}."
@@ -139,6 +141,8 @@ class InputSchema:
         return tuple(feature.name for feature in self.features)
 
     def process(self, data: Any) -> InputBatch:
+        if _is_pandas_dataframe(data):
+            return self._process_dataframe(data)
         if _is_pandas_object(data):
             data = _pandas_to_supported(data)
 
@@ -162,6 +166,38 @@ class InputSchema:
             feature_names=self.feature_names,
             is_single=is_single,
         )
+
+    # Covered by the optional pandas/sklearn integration suite.
+    def _process_dataframe(self, data: Any) -> InputBatch:  # pragma: no cover
+        if data.shape[0] == 0 or data.shape[1] == 0:
+            raise InputValidationError("Pandas DataFrame input cannot be empty.")
+        if data.columns.has_duplicates:
+            raise InputValidationError("Pandas DataFrame columns must be unique.")
+
+        columns = set(data.columns.tolist())
+        expected = set(self.feature_names)
+        extras = columns - expected
+        if extras and self.extra_fields == "forbid":
+            raise UnexpectedFeatureError(
+                f"Unexpected features: {', '.join(sorted(map(str, extras)))}."
+            )
+
+        all_declared_columns_present = all(
+            name in columns for name in self.feature_names
+        )
+        can_preserve_dtypes = all_declared_columns_present and (
+            not self.coerce or all(feature.dtype is None for feature in self.features)
+        )
+        if can_preserve_dtypes:
+            for feature in self.features:
+                for value in data[feature.name].tolist():
+                    feature.validate(value, coerce=self.coerce)
+            selected = data.loc[:, list(self.feature_names)].copy()
+            return InputBatch(selected, self.feature_names, is_single=False)
+
+        rows = [self._validate_mapping(item) for item in data.to_dict(orient="records")]
+        validated = type(data)(rows, columns=self.feature_names, index=data.index)
+        return InputBatch(validated, self.feature_names, is_single=False)
 
     def _rows_from_mapping(self, data: Mapping[str, Any]) -> tuple[list[list[Any]], bool]:
         if not data:
@@ -258,6 +294,12 @@ class InputSchema:
 def process_untyped_array(data: Any) -> InputBatch:
     """Process array-only input when the user did not declare named features."""
 
+    if _is_pandas_dataframe(data):
+        if data.shape[0] == 0 or data.shape[1] == 0:
+            raise InputValidationError("Pandas DataFrame input cannot be empty.")
+        names = tuple(str(column) for column in data.columns)
+        return InputBatch(data, names, is_single=False)
+
     if isinstance(data, Mapping) or (
         isinstance(data, Sequence)
         and not isinstance(data, (str, bytes, np.ndarray))
@@ -295,6 +337,10 @@ def _is_column(value: Any) -> bool:
 
 def _is_pandas_object(data: Any) -> bool:
     return type(data).__module__.split(".", 1)[0] == "pandas"
+
+
+def _is_pandas_dataframe(data: Any) -> bool:
+    return _is_pandas_object(data) and type(data).__name__ == "DataFrame"
 
 
 def _pandas_to_supported(data: Any) -> Any:

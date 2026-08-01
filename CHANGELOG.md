@@ -37,6 +37,9 @@ series, breaking changes are called out explicitly.
   shared named input while explicit `InputSchema` instances remain strict by default.
 - Arbitrary object arrays and complex model outputs are rejected with an
   `OutputValidationError` instead of entering downstream aggregation or serialization.
+- Pandas DataFrame inputs now retain column names and dtypes for sklearn-compatible models,
+  including `Pipeline` and `ColumnTransformer`; `features=[...]` selects DataFrame columns
+  without coercing categorical features to floats.
 
 ### Removed
 

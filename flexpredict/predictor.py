@@ -6,6 +6,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
+import numpy as np
+
 from .engines import (
     InferenceEngine,
     create_engine,
@@ -40,7 +42,7 @@ class Predictor:
             raise ConfigurationError("Pass either features or schema, not both.")
         self.model = model
         self.schema = (
-            InputSchema.from_names(features, extra_fields="ignore")
+            InputSchema.from_names(features, dtype=None, extra_fields="ignore")
             if features is not None
             else schema
         )
@@ -142,7 +144,12 @@ class Predictor:
 
     def _prepare(self, data: Any) -> Any:
         batch = self.schema.process(data) if self.schema else process_untyped_array(data)
-        values = apply_preprocessor(self.preprocessor, batch.values)
+        if self.preprocessor is None:
+            values = batch.values
+            if not self._engine.preserves_dataframe:
+                values = np.asarray(values)
+        else:
+            values = apply_preprocessor(self.preprocessor, batch.values)
         return type(batch)(values, batch.feature_names, batch.is_single)
 
     def _validate_semantics(self) -> None:

@@ -20,6 +20,8 @@ from .exceptions import (
 class InferenceEngine(ABC):
     """Framework adapter used by :class:`flexpredict.Predictor`."""
 
+    preserves_dataframe = False
+
     def __init__(self, model: Any, *, output_selector: Any = None) -> None:
         self.model = model
         self.output_selector = output_selector
@@ -48,6 +50,8 @@ class InferenceEngine(ABC):
 
 
 class GenericEngine(InferenceEngine):
+    preserves_dataframe = True
+
     def predict(self, values: np.ndarray) -> Any:
         method = getattr(self.model, "predict", None)
         if not callable(method):
@@ -83,7 +87,9 @@ class TorchEngine(InferenceEngine):
     def predict(self, values: np.ndarray) -> Any:
         torch = _import_torch()
         try:
-            tensor = torch.as_tensor(values, dtype=self.dtype, device=self.device)
+            tensor = torch.as_tensor(
+                np.asarray(values), dtype=self.dtype, device=self.device
+            )
             with torch.inference_mode():
                 output = self.model(tensor)
             return _select_output(output, self.output_selector)
@@ -112,7 +118,10 @@ class TensorFlowEngine(InferenceEngine):
 
     def predict(self, values: np.ndarray) -> Any:
         try:
-            return _select_output(self.model.predict(values, verbose=0), self.output_selector)
+            return _select_output(
+                self.model.predict(np.asarray(values), verbose=0),
+                self.output_selector,
+            )
         except (OutputValidationError, UnsupportedOutputError):
             raise
         except Exception as exc:

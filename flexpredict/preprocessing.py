@@ -38,7 +38,7 @@ class Standardizer:
         return (array - self.mean) / self.std
 
 
-def apply_preprocessor(preprocessor: Any, values: np.ndarray) -> np.ndarray:
+def apply_preprocessor(preprocessor: Any, values: Any) -> np.ndarray:
     if preprocessor is None:
         return np.asarray(values)
     try:
@@ -65,4 +65,3 @@ def apply_preprocessor(preprocessor: Any, values: np.ndarray) -> np.ndarray:
     if np.issubdtype(array.dtype, np.number) and not np.all(np.isfinite(array)):
         raise PreprocessingError("Preprocessor returned NaN or infinite values.")
     return array
-
