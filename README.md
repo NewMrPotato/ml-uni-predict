@@ -92,6 +92,11 @@ predictor.predict([
 ])
 ```
 
+`features=[...]` is a feature-selection shortcut: declared features are required, selected
+from a named input and passed to the model in the declared order; unrelated fields are
+ignored. This allows one shared request to feed ensemble members with different feature
+subsets. Use an explicit `InputSchema` when extra fields must be rejected.
+
 ## Schema-aware input
 
 Use an explicit schema only when validation is useful:
@@ -109,7 +114,8 @@ predictor = Predictor(model, schema=schema)
 result = predictor.predict({"age": "31", "income": 150_000})
 ```
 
-By default, values are coerced to their declared types and extra fields are rejected.
+By default, values are coerced to their declared types and extra fields are rejected for an
+explicit schema.
 Errors identify the invalid or missing feature before the model is called.
 
 ## Preprocessing

@@ -3,9 +3,13 @@ import pytest
 
 from flexpredict import (
     ConfigurationError,
+    EnsemblePredictor,
+    InputSchema,
+    MissingFeatureError,
     Predictor,
     PreprocessingError,
     Standardizer,
+    UnexpectedFeatureError,
 )
 
 
@@ -19,6 +23,14 @@ class SumRegressor:
 class ListRegressor:
     def predict(self, values):
         return [float(row[0]) for row in values]
+
+
+class DifferenceRegressor:
+    _estimator_type = "regressor"
+
+    def predict(self, values):
+        array = np.asarray(values, dtype=float)
+        return array[:, 0] - array[:, 1]
 
 
 class BinaryClassifier:
@@ -61,6 +73,51 @@ def test_predictor_features_enable_all_named_formats():
     assert single.single() == 3.0
     assert np.allclose(columns.values, [[3], [7]])
     assert np.allclose(records.values, [[3], [7]])
+
+
+def test_predictor_features_select_and_order_a_subset_of_named_input():
+    predictor = Predictor(DifferenceRegressor(), features=["x2", "x1"])
+
+    result = predictor.predict(
+        {"unused": [100, 200], "x1": [1, 3], "x2": [2, 4]}
+    )
+
+    assert np.allclose(result.values, [[1], [1]])
+
+
+def test_predictor_features_ignore_extras_but_require_declared_features():
+    predictor = Predictor(SumRegressor(), features=["x1", "required"])
+
+    with pytest.raises(MissingFeatureError, match="required"):
+        predictor.predict({"x1": 1, "unused": 2})
+
+
+def test_explicit_input_schema_remains_strict_by_default():
+    predictor = Predictor(SumRegressor(), schema=InputSchema.from_names(["x1"]))
+
+    with pytest.raises(UnexpectedFeatureError, match="unused"):
+        predictor.predict({"x1": 1, "unused": 2})
+
+
+def test_ensemble_members_select_different_feature_subsets():
+    common_input = {
+        "a": [1.0, 2.0],
+        "b": [10.0, 20.0],
+        "c": [100.0, 200.0],
+        "d": [1000.0, 2000.0],
+    }
+    ensemble = EnsemblePredictor(
+        [
+            Predictor(SumRegressor(), features=["a", "b"]),
+            Predictor(SumRegressor(), features=["c", "d"]),
+        ],
+        aggregation="weighted_mean",
+        aggregation_weights=[0.25, 0.75],
+    )
+
+    result = ensemble.predict(common_input)
+
+    assert np.allclose(result.values[:, 0], [827.75, 1655.5])
 
 
 def test_predictor_accepts_list_model_output():

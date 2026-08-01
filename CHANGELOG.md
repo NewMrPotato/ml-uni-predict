@@ -29,6 +29,11 @@ series, breaking changes are called out explicitly.
 - Framework-specific settings are grouped in `engine_options`.
 - Package metadata reads its version from `flexpredict.__version__` to prevent drift.
 
+### Fixed
+
+- `Predictor(features=[...])` now selects and orders its declared feature subset from a
+  shared named input while explicit `InputSchema` instances remain strict by default.
+
 ### Removed
 
 - The old `UniPredictor`, `ModelConfig`, `mean/std` constructor parameters and legacy

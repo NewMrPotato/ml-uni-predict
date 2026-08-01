@@ -40,7 +40,7 @@ class Predictor:
             raise ConfigurationError("Pass either features or schema, not both.")
         self.model = model
         self.schema = (
-            InputSchema.from_names(features, extra_fields="forbid")
+            InputSchema.from_names(features, extra_fields="ignore")
             if features is not None
             else schema
         )
