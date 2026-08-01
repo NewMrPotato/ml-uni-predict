@@ -37,8 +37,6 @@ class PredictionResult:
             )
         if values.shape[0] == 0 or values.shape[1] == 0:
             raise OutputValidationError("PredictionResult.values cannot be empty.")
-        if np.issubdtype(values.dtype, np.number) and not np.all(np.isfinite(values)):
-            raise OutputValidationError("PredictionResult.values must contain only finite values.")
         if self.is_single and values.shape[0] != 1:
             raise OutputValidationError(
                 "is_single=True requires PredictionResult.values to contain one sample."
@@ -49,12 +47,11 @@ class PredictionResult:
             raise OutputValidationError(f"Unknown prediction task: {self.task!r}.")
         if self.output_kind not in {"values", "labels", "probabilities", "logits"}:
             raise OutputValidationError(f"Unknown output kind: {self.output_kind!r}.")
-        if self.output_kind in {"probabilities", "logits"} and not np.issubdtype(
-            values.dtype, np.number
-        ):
+        if self.task == "regression" and self.output_kind != "values":
             raise OutputValidationError(
-                f"{self.output_kind.capitalize()} must contain numeric values."
+                f"Regression results cannot use output_kind={self.output_kind!r}."
             )
+        _validate_output_values(values, self.output_kind)
         if self.output_kind == "probabilities" and (
             np.any(values < -1e-12) or np.any(values > 1.0 + 1e-12)
         ):
@@ -66,10 +63,7 @@ class PredictionResult:
                 raise OutputValidationError("classes must be a one-dimensional array.")
             if classes.size == 0:
                 raise OutputValidationError("classes cannot be empty.")
-            if np.issubdtype(classes.dtype, np.number) and not np.all(
-                np.isfinite(classes)
-            ):
-                raise OutputValidationError("classes must contain only finite values.")
+            _validate_label_values(classes, field_name="classes")
             if _contains_duplicates(classes):
                 raise OutputValidationError("classes must contain unique values.")
             if self.output_kind in {"probabilities", "logits"} and len(classes) != values.shape[1]:
@@ -97,6 +91,51 @@ class PredictionResult:
         if self.n_outputs == 1:
             return row[0].item() if hasattr(row[0], "item") else row[0]
         return row.copy()
+
+
+def _validate_output_values(values: np.ndarray, output_kind: OutputKind) -> None:
+    if output_kind == "labels":
+        _validate_label_values(values, field_name="Classification labels")
+        return
+
+    if values.dtype.kind not in {"i", "u", "f"}:
+        raise OutputValidationError(
+            f"{output_kind.capitalize()} must contain real numeric values; "
+            f"received dtype {values.dtype}."
+        )
+    if not np.all(np.isfinite(values)):
+        raise OutputValidationError("PredictionResult.values must contain only finite values.")
+
+
+def _validate_label_values(values: np.ndarray, *, field_name: str) -> None:
+    if values.dtype.kind in {"b", "i", "u", "U"}:
+        return
+    if values.dtype.kind == "f":
+        if np.all(np.isfinite(values)):
+            return
+        raise OutputValidationError(f"{field_name} must contain only finite values.")
+    if values.dtype.kind == "O":
+        for value in values.reshape(-1):
+            if not _is_supported_label(value):
+                raise OutputValidationError(
+                    f"{field_name} contain an unsupported {type(value).__name__} object; "
+                    "expected strings, booleans or finite real numbers."
+                )
+        return
+    raise OutputValidationError(
+        f"{field_name} must contain strings, booleans or finite real numbers; "
+        f"received dtype {values.dtype}."
+    )
+
+
+def _is_supported_label(value: Any) -> bool:
+    if isinstance(value, (str, bool, np.str_, np.bool_)):
+        return True
+    if isinstance(value, (int, np.integer)):
+        return True
+    if isinstance(value, (float, np.floating)):
+        return bool(np.isfinite(value))
+    return False
 
 
 def _contains_duplicates(values: np.ndarray) -> bool:

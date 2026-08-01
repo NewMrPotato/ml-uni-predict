@@ -28,11 +28,15 @@ series, breaking changes are called out explicitly.
 - Packaging now uses `pyproject.toml` as its only source of metadata.
 - Framework-specific settings are grouped in `engine_options`.
 - Package metadata reads its version from `flexpredict.__version__` to prevent drift.
+- Output dtype validation now permits primitive classification labels while requiring real
+  numeric values for regression values, probabilities and logits.
 
 ### Fixed
 
 - `Predictor(features=[...])` now selects and orders its declared feature subset from a
   shared named input while explicit `InputSchema` instances remain strict by default.
+- Arbitrary object arrays and complex model outputs are rejected with an
+  `OutputValidationError` instead of entering downstream aggregation or serialization.
 
 ### Removed
 

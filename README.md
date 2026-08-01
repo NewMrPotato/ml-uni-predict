@@ -63,6 +63,30 @@ print(result.values)       # always a 2D NumPy array
 print(result.task)         # inferred for sklearn-compatible estimators
 ```
 
+### Output contract
+
+`PredictionResult.values` is always a non-empty two-dimensional array. FlexPredict rejects
+non-finite numeric output and applies the following dtype rules:
+
+| Output kind | Supported values |
+| --- | --- |
+| Regression or generic `values` | finite real integers and floats |
+| `probabilities` | finite real numbers between 0 and 1 |
+| `logits` | finite real numbers |
+| Classification `labels` | strings, booleans and finite real numbers |
+
+Complex numbers and arbitrary Python objects such as dictionaries, nested lists and `None`
+are rejected. A custom classifier returning string labels should declare its semantics when
+they cannot be inferred:
+
+```python
+predictor = Predictor(
+    custom_classifier,
+    task="classification",
+    output_kind="labels",
+)
+```
+
 ### Named input
 
 ```python

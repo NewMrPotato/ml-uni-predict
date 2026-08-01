@@ -6,6 +6,7 @@ from flexpredict import (
     EnsemblePredictor,
     InputSchema,
     MissingFeatureError,
+    OutputValidationError,
     Predictor,
     PreprocessingError,
     Standardizer,
@@ -49,6 +50,14 @@ class ForwardProbabilityClassifier:
     def predict(self, values):
         probability = np.asarray(values, dtype=float)[:, 0]
         return np.column_stack([1 - probability, probability])
+
+
+class FixedOutputModel:
+    def __init__(self, output):
+        self.output = output
+
+    def predict(self, values):
+        return self.output
 
 
 def test_predictor_zero_config_accepts_arrays():
@@ -126,6 +135,33 @@ def test_predictor_accepts_list_model_output():
     result = predictor.predict([[1, 2], [3, 4]])
 
     assert np.allclose(result.values, [[1], [3]])
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        np.array(["broken", "broken"]),
+        np.array([1 + 2j, 1 + 2j]),
+        np.array([{"prediction": 0}, {"prediction": 1}], dtype=object),
+    ],
+)
+def test_predictor_rejects_non_real_value_outputs(output):
+    predictor = Predictor(FixedOutputModel(output))
+
+    with pytest.raises(OutputValidationError, match="real numeric"):
+        predictor.predict([[1], [2]])
+
+
+def test_predictor_rejects_arbitrary_objects_as_classification_labels():
+    output = np.array([{"prediction": 0}, {"prediction": 1}], dtype=object)
+    predictor = Predictor(
+        FixedOutputModel(output),
+        task="classification",
+        output_kind="labels",
+    )
+
+    with pytest.raises(OutputValidationError, match="unsupported"):
+        predictor.predict([[1], [2]])
 
 
 def test_predictor_applies_standardizer():

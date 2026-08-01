@@ -48,6 +48,59 @@ def test_prediction_result_validates_probability_contract():
         PredictionResult(np.array([[-0.1, 1.1]]), output_kind="probabilities")
 
 
+@pytest.mark.parametrize("output_kind", ["values", "probabilities", "logits"])
+def test_numeric_outputs_reject_complex_values(output_kind):
+    with pytest.raises(OutputValidationError, match="real numeric"):
+        PredictionResult(
+            np.array([[1 + 2j]], dtype=np.complex128),
+            output_kind=output_kind,
+        )
+
+
+def test_value_outputs_reject_strings_and_object_arrays():
+    arbitrary = np.empty((1, 1), dtype=object)
+    arbitrary[0, 0] = {"prediction": 1}
+
+    with pytest.raises(OutputValidationError, match="real numeric"):
+        PredictionResult(np.array([["broken"]]))
+    with pytest.raises(OutputValidationError, match="real numeric"):
+        PredictionResult(arbitrary)
+
+
+def test_classification_labels_accept_supported_scalar_types():
+    labels = np.array([["cat"], [1], [True], [2.5]], dtype=object)
+
+    result = PredictionResult(
+        labels,
+        task="classification",
+        output_kind="labels",
+    )
+
+    assert result.values.tolist() == [["cat"], [1], [True], [2.5]]
+
+
+def test_regression_results_cannot_bypass_output_kind_semantics():
+    with pytest.raises(OutputValidationError, match="Regression results"):
+        PredictionResult(
+            np.array([["label"]]),
+            task="regression",
+            output_kind="labels",
+        )
+
+
+@pytest.mark.parametrize("label", [{"class": 1}, ["nested"], None, 1 + 2j, b"bytes"])
+def test_classification_labels_reject_unsupported_objects(label):
+    labels = np.empty((1, 1), dtype=object)
+    labels[0, 0] = label
+
+    with pytest.raises(OutputValidationError, match="unsupported"):
+        PredictionResult(
+            labels,
+            task="classification",
+            output_kind="labels",
+        )
+
+
 def test_prediction_result_requires_unique_non_empty_classes():
     with pytest.raises(OutputValidationError, match="empty"):
         PredictionResult(np.array([[1.0]]), classes=np.array([]))
@@ -55,3 +108,7 @@ def test_prediction_result_requires_unique_non_empty_classes():
         PredictionResult(np.array([[1.0]]), classes=np.array(["same", "same"]))
     with pytest.raises(OutputValidationError, match="finite"):
         PredictionResult(np.array([[1.0]]), classes=np.array([np.nan]))
+    unsupported = np.empty(1, dtype=object)
+    unsupported[0] = {"class": 1}
+    with pytest.raises(OutputValidationError, match="unsupported"):
+        PredictionResult(np.array([[1.0]]), classes=unsupported)
