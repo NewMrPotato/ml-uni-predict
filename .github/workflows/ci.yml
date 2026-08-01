@@ -71,7 +71,7 @@ jobs:
       - name: Smoke-test the built wheel
         run: |
           python -m pip install --force-reinstall dist/*.whl
-          python -c "import flexpredict; assert flexpredict.__version__ == '0.2.0'"
+          python -c "from importlib.metadata import version; import flexpredict; assert version('flexpredict') == flexpredict.__version__"
 
   framework-integration:
     name: Integration (${{ matrix.framework }})

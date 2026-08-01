@@ -48,4 +48,4 @@ __all__ = [
     "load_torch_state_dict",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.2.0a1"

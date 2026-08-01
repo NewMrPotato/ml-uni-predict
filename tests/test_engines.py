@@ -29,7 +29,7 @@ class Model:
 
 
 def test_base_import_does_not_import_optional_frameworks():
-    assert flexpredict.__version__ == "0.2.0"
+    assert flexpredict.__version__
     assert "torch" not in sys.modules
     assert "tensorflow" not in sys.modules
 

@@ -24,6 +24,9 @@ python -m ruff check flexpredict tests examples
 python -m mypy flexpredict
 python -m build
 python -m twine check dist/*
+python -m examples.basic
+python -m examples.schema_and_preprocessing
+python -m examples.ensemble
 ```
 
 Changes to an optional engine or loader should also run its integration test file. Tests

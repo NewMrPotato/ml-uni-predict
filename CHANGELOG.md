@@ -5,7 +5,7 @@ All notable changes to FlexPredict are documented in this file.
 The project follows Semantic Versioning after the 1.0 release. During the 0.x alpha
 series, breaking changes are called out explicitly.
 
-## [0.2.0] - Unreleased
+## [0.2.0a1] - 2026-08-02
 
 ### Added
 
