@@ -1,105 +1,219 @@
-import pytest
+import sys
+import types
+
 import numpy as np
-import torch
-import tensorflow as tf
-from unipredict.engines import SklearnEngine, TorchEngine, TensorFlowEngine, get_engine
+import pytest
+
+import flexpredict
+from flexpredict import (
+    ConfigurationError,
+    EngineNotAvailableError,
+    InferenceError,
+    OutputValidationError,
+    Predictor,
+    UnsupportedOutputError,
+    register_engine,
+)
+from flexpredict.engines import (
+    GenericEngine,
+    TensorFlowEngine,
+    TorchEngine,
+    create_engine,
+    normalize_output,
+)
 
 
-class TestSklearnEngine:
-    """Тесты SklearnEngine."""
-
-    def test_predict_shape(self, sklearn_model, X_sample):
-        engine = SklearnEngine(sklearn_model)
-        result = engine.predict(X_sample)
-        assert isinstance(result, np.ndarray)
-        assert result.shape[0] == X_sample.shape[0]
-        assert result.ndim == 1 or result.shape[1] == 1
-
-    def test_predict_single(self, sklearn_model):
-        engine = SklearnEngine(sklearn_model)
-        X = np.array([[1.0, 2.0, 3.0, 4.0, 5.0]])
-        result = engine.predict(X)
-        assert result.shape == (1,)
+class Model:
+    def predict(self, values):
+        return np.ones(len(values))
 
 
-class TestTorchEngine:
-    """Тесты TorchEngine."""
-
-    def test_predict_shape(self, torch_model, X_sample):
-        engine = TorchEngine(torch_model, device='cpu')
-        result = engine.predict(X_sample)
-        assert isinstance(result, np.ndarray)
-        assert result.shape[0] == X_sample.shape[0]
-        assert result.ndim == 2 and result.shape[1] == 1
-
-    def test_predict_single(self, torch_model):
-        engine = TorchEngine(torch_model, device='cpu')
-        X = np.array([[1.0, 2.0, 3.0, 4.0, 5.0]])
-        result = engine.predict(X)
-        assert result.shape == (1, 1)
-
-    def test_device(self, torch_model):
-        engine = TorchEngine(torch_model, device='cpu')
-        assert engine.device.type == 'cpu'
+def test_base_import_does_not_import_optional_frameworks():
+    assert flexpredict.__version__
+    assert "torch" not in sys.modules
+    assert "tensorflow" not in sys.modules
 
 
-class TestTensorFlowEngine:
-    """Тесты TensorFlowEngine."""
-
-    def test_predict_shape(self, tf_model, X_sample):
-        engine = TensorFlowEngine(tf_model)
-        result = engine.predict(X_sample)
-        assert isinstance(result, np.ndarray)
-        assert result.shape[0] == X_sample.shape[0]
-        assert result.ndim == 2 and result.shape[1] == 1
-
-    def test_predict_single(self, tf_model):
-        engine = TensorFlowEngine(tf_model)
-        X = np.array([[1.0, 2.0, 3.0, 4.0, 5.0]])
-        result = engine.predict(X)
-        assert result.shape == (1, 1)
+def test_auto_detection_uses_generic_engine_for_predict_models():
+    assert isinstance(create_engine(Model()), GenericEngine)
 
 
-class TestGetEngine:
-    """Тесты фабрики движков."""
+def test_modern_sklearn_tags_drive_metadata_without_legacy_attribute():
+    class Tags:
+        estimator_type = "classifier"
 
-    def test_sklearn_engine(self, sklearn_model):
-        engine = get_engine(sklearn_model)
-        assert isinstance(engine, SklearnEngine)
+    class TaggedClassifier:
+        classes_ = np.array(["negative", "positive"])
 
-    def test_torch_engine(self, torch_model):
-        engine = get_engine(torch_model, device='cpu')
-        assert isinstance(engine, TorchEngine)
+        def __sklearn_tags__(self):
+            return Tags()
 
-    def test_tf_engine(self, tf_model):
-        engine = get_engine(tf_model)
-        assert isinstance(engine, TensorFlowEngine)
+        def predict(self, values):
+            return np.full(len(values), "positive")
 
-    def test_explicit_engine_type(self, sklearn_model):
-        engine = get_engine(sklearn_model, engine_type='sklearn')
-        assert isinstance(engine, SklearnEngine)
+        def predict_proba(self, values):
+            return np.tile([0.25, 0.75], (len(values), 1))
 
-    def test_unknown_engine_type(self, sklearn_model):
-        with pytest.raises(ValueError, match="Неизвестный тип движка"):
-            get_engine(sklearn_model, engine_type='unknown')
+    predictor = Predictor(TaggedClassifier())
+    result = predictor.predict_proba([[1], [2]])
 
-    def test_custom_model_with_predict(self):
-        """Модель с методом predict должна быть обёрнута в SklearnEngine."""
-        class CustomModel:
-            def predict(self, X):
-                return np.ones(X.shape[0])
-        model = CustomModel()
-        engine = get_engine(model)
-        assert isinstance(engine, SklearnEngine)
+    assert predictor.task == "classification"
+    assert result.classes.tolist() == ["negative", "positive"]
 
-        X = np.array([[1.0, 2.0, 3.0]])
-        result = engine.predict(X)
-        assert np.allclose(result, np.ones(3))
 
-    def test_custom_model_without_predict(self):
-        """Модель без метода predict должна выбрасывать понятное исключение."""
-        class CustomModel:
-            pass
-        model = CustomModel()
-        with pytest.raises(ValueError, match="Не удалось определить тип модели"):
-            get_engine(model)
+def test_unknown_engine_has_clear_error():
+    with pytest.raises(ConfigurationError, match="Unknown engine"):
+        Predictor(Model(), engine="missing")
+
+
+def test_generic_engine_rejects_unknown_options():
+    with pytest.raises(ConfigurationError, match="Invalid options"):
+        Predictor(Model(), engine_options={"unknown": True})
+
+
+def test_output_normalization_distinguishes_batch_and_multioutput():
+    assert normalize_output([1, 2], n_samples=2).shape == (2, 1)
+    assert normalize_output([1, 2], n_samples=1).shape == (1, 2)
+
+
+@pytest.mark.parametrize(
+    ("output", "samples", "message"),
+    [
+        (1.0, 2, "scalar"),
+        ([1, 2, 3], 2, "length"),
+        (np.ones((3, 1)), 2, "returned 3 samples"),
+        (np.ones((2, 1, 1)), 2, "scalar, 1D or 2D"),
+        (np.array([np.nan, 1.0]), 2, "NaN"),
+    ],
+)
+def test_output_normalization_rejects_invalid_outputs(output, samples, message):
+    with pytest.raises(OutputValidationError, match=message):
+        normalize_output(output, n_samples=samples)
+
+
+def test_generic_engine_wraps_model_errors_and_missing_probability_method():
+    class Broken:
+        def predict(self, values):
+            raise RuntimeError("boom")
+
+    engine = GenericEngine(Broken())
+    with pytest.raises(InferenceError, match="boom"):
+        engine.predict(np.ones((1, 1)))
+    with pytest.raises(UnsupportedOutputError, match="predict_proba"):
+        engine.predict_proba(np.ones((1, 1)))
+
+
+def test_output_selector_handles_named_outputs():
+    class MultiOutput:
+        def predict(self, values):
+            return {"first": np.zeros((len(values), 1)), "second": np.ones((len(values), 1))}
+
+    selected = Predictor(MultiOutput(), output_selector="second").predict([[1]])
+    assert selected.single() == 1.0
+
+    with pytest.raises(OutputValidationError, match="multiple named outputs"):
+        Predictor(MultiOutput()).predict([[1]])
+
+
+def test_custom_engine_registration_and_detection():
+    class SpecialModel:
+        pass
+
+    class SpecialEngine(GenericEngine):
+        def predict(self, values):
+            return np.full(len(values), 7)
+
+    register_engine(
+        "test-special",
+        SpecialEngine,
+        detector=lambda model: isinstance(model, SpecialModel),
+        priority=100,
+    )
+
+    assert Predictor(SpecialModel()).predict([[1]]).single() == 7
+    with pytest.raises(ConfigurationError, match="already registered"):
+        register_engine("test-special", SpecialEngine)
+
+
+def test_fake_torch_engine_is_lazy_and_supports_user_subclasses(monkeypatch):
+    module = types.ModuleType("torch")
+
+    class Module:
+        __module__ = "torch.nn"
+
+        def to(self, device):
+            self.device = device
+            return self
+
+        def eval(self):
+            self.evaluated = True
+            return self
+
+    class Tensor:
+        def __init__(self, values):
+            self.values = np.asarray(values)
+
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self.values
+
+    class InferenceMode:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    module.nn = types.SimpleNamespace(Module=Module)
+    module.float32 = "float32"
+    module.device = lambda value: value
+    module.as_tensor = lambda values, **kwargs: Tensor(values)
+    module.inference_mode = InferenceMode
+    monkeypatch.setitem(sys.modules, "torch", module)
+
+    class UserModel(Module):
+        def __call__(self, tensor):
+            return Tensor(tensor.values.sum(axis=1))
+
+    predictor = Predictor(UserModel(), task="regression")
+    result = predictor.predict([[1, 2], [3, 4]])
+
+    assert isinstance(predictor._engine, TorchEngine)
+    assert np.allclose(result.values, [[3], [7]])
+
+
+def test_fake_tensorflow_engine(monkeypatch):
+    module = types.ModuleType("tensorflow")
+
+    class KerasModel:
+        __module__ = "tensorflow.keras"
+
+    module.keras = types.SimpleNamespace(Model=KerasModel)
+    monkeypatch.setitem(sys.modules, "tensorflow", module)
+
+    class UserModel(KerasModel):
+        def predict(self, values, verbose=0):
+            return np.asarray(values).sum(axis=1)
+
+    predictor = Predictor(UserModel(), task="regression")
+
+    assert isinstance(predictor._engine, TensorFlowEngine)
+    assert predictor.predict([[1, 2]]).single() == 3
+
+
+def test_missing_optional_engine_has_install_hint(monkeypatch):
+    monkeypatch.setitem(sys.modules, "torch", None)
+
+    class TorchBase:
+        __module__ = "torch.nn"
+
+    class UserModel(TorchBase):
+        pass
+
+    with pytest.raises(EngineNotAvailableError, match=r"flexpredict\[torch\]"):
+        Predictor(UserModel())
