@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "flexpredict"
 dynamic = ["version"]
-description = "Composable, framework-agnostic inference for tabular machine learning models"
+description = "Schema-aware inference composition with unified outputs and heterogeneous ensembles"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

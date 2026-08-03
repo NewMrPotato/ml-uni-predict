@@ -21,7 +21,7 @@ It intentionally does not preserve the former `unipredict` API.
 
 ## Installation
 
-After publication, install the base package with:
+Install the published base package from PyPI with:
 
 ```bash
 python -m pip install "flexpredict==0.2.0a1"
@@ -35,3 +35,6 @@ python -m pip install "flexpredict[sklearn,pandas]==0.2.0a1"
 
 Because this is an alpha release, public API changes may still occur before 1.0. Model
 artifacts must be loaded only from trusted sources.
+
+- [PyPI package](https://pypi.org/project/flexpredict/0.2.0a1/)
+- [GitHub release](https://github.com/NewMrPotato/ml-flex-predict/releases/tag/v0.2.0a1)

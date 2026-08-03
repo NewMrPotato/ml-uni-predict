@@ -1,11 +1,17 @@
 # FlexPredict
 
-FlexPredict is a small, composable inference layer for tabular machine-learning models.
-It gives NumPy, scikit-learn-compatible, PyTorch, TensorFlow/Keras and custom models a
-consistent input and output contract, while allowing every model to keep its own schema
-and preprocessing pipeline.
+[![PyPI](https://img.shields.io/pypi/v/flexpredict)](https://pypi.org/project/flexpredict/)
+[![Python](https://img.shields.io/pypi/pyversions/flexpredict)](https://pypi.org/project/flexpredict/)
+[![CI](https://github.com/NewMrPotato/ml-flex-predict/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NewMrPotato/ml-flex-predict/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/flexpredict)](https://github.com/NewMrPotato/ml-flex-predict/blob/main/LICENSE)
 
-> FlexPredict 0.2 is an alpha redesign. It intentionally does not preserve the old
+FlexPredict is a schema-aware inference composition layer for Python with unified outputs,
+preprocessing, model loading and heterogeneous ensemble support. It gives NumPy,
+scikit-learn-compatible, PyTorch, TensorFlow/Keras and custom models a consistent input and
+output contract while allowing every model to keep its own schema and preprocessing pipeline.
+
+> The current public release is [0.2.0a1](https://pypi.org/project/flexpredict/0.2.0a1/).
+> FlexPredict 0.2 is an alpha redesign and intentionally does not preserve the old
 > `unipredict` API.
 
 ## Why FlexPredict?
@@ -28,39 +34,61 @@ Core properties:
 
 ## Installation
 
-Development install:
+FlexPredict supports Python 3.10 through 3.13. Install the current alpha release from PyPI:
 
 ```bash
-git clone https://github.com/NewMrPotato/ml-flex-predict.git
-cd ml-flex-predict
-pip install -e .
+python -m pip install flexpredict
 ```
 
-Optional frameworks:
+Pin the version for a reproducible application environment:
 
 ```bash
-pip install -e ".[sklearn]"
-pip install -e ".[torch]"
-pip install -e ".[tensorflow]"
-pip install -e ".[pandas]"
-pip install -e ".[dev]"
+python -m pip install "flexpredict==0.2.0a1"
 ```
 
-The base package depends only on NumPy. Importing `flexpredict` does not import or
-require PyTorch, TensorFlow, pandas or scikit-learn.
+The base package installs only NumPy. Add the integrations required by the application:
+
+```bash
+python -m pip install "flexpredict[sklearn,pandas]"
+python -m pip install "flexpredict[torch]"
+python -m pip install "flexpredict[tensorflow]"
+```
+
+| Extra | Installs | Use it for |
+| --- | --- | --- |
+| `pandas` | pandas | DataFrame inputs and dtype-preserving pipelines |
+| `sklearn` | scikit-learn and joblib | sklearn estimators and joblib artifacts |
+| `torch` | PyTorch | tensor inference and PyTorch model loading |
+| `tensorflow` | TensorFlow | Keras/TensorFlow inference and model loading |
+| `all` | every optional integration | environments that need every supported framework |
+
+Optional frameworks are imported lazily: installing the base package does not require or
+import PyTorch, TensorFlow, pandas or scikit-learn. Contributors should use an editable
+source install described in the
+[contribution guide](https://github.com/NewMrPotato/ml-flex-predict/blob/main/CONTRIBUTING.md),
+not the commands above.
 
 ## Quick start
 
 ### Array input with no configuration
 
 ```python
+import numpy as np
+
 from flexpredict import Predictor
 
-predictor = Predictor(model)
+class SumRegressor:
+    _estimator_type = "regressor"
+
+    def predict(self, values):
+        return np.asarray(values, dtype=float).sum(axis=1)
+
+
+predictor = Predictor(SumRegressor())
 result = predictor.predict([[1.0, 2.0], [3.0, 4.0]])
 
-print(result.values)       # always a 2D NumPy array
-print(result.task)         # inferred for sklearn-compatible estimators
+print(result.values)  # [[3.0], [7.0]] — always a 2D NumPy array
+print(result.task)    # regression
 ```
 
 ### Output contract
@@ -274,27 +302,13 @@ intentionally supports pandas semantics can declare `preserves_dataframe = True`
 
 ## Development
 
-```bash
-python -m pytest
-python -m pytest --cov=flexpredict --cov-fail-under=85
-python -m ruff check flexpredict tests examples
-python -m mypy flexpredict
-python -m compileall -q flexpredict tests examples
-python -m build
-```
-
-The fast unit suite requires only NumPy and pytest. Framework integration suites are
-kept separate so that schema and ensemble tests do not require heavy optional packages.
-The current fast suite enforces at least 85% coverage; this threshold will increase as
-the optional-framework integration matrix grows.
-
-GitHub Actions additionally installs and tests the `sklearn`, `torch` and `tensorflow`
-extras in isolated Python 3.11 jobs.
-
-See the [contribution guide](https://github.com/NewMrPotato/ml-flex-predict/blob/main/CONTRIBUTING.md)
-for the development workflow and the
+Bug reports, focused feature proposals, documentation improvements and pull requests are
+welcome. See the
+[contribution guide](https://github.com/NewMrPotato/ml-flex-predict/blob/main/CONTRIBUTING.md)
+for editable installation, branch policy, required checks and pull-request expectations.
+Maintainers use the
 [release checklist](https://github.com/NewMrPotato/ml-flex-predict/blob/main/docs/release-checklist.md)
-for the alpha-release gate.
+for TestPyPI and PyPI publication.
 
 ## Security
 
