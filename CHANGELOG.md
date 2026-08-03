@@ -5,7 +5,19 @@ All notable changes to FlexPredict are documented in this file.
 The project follows Semantic Versioning after the 1.0 release. During the 0.x alpha
 series, breaking changes are called out explicitly.
 
-## [0.2.0a1] - 2026-08-02
+## [Unreleased]
+
+### Added
+
+- Protected OIDC Trusted Publishing workflows for TestPyPI and PyPI.
+- Public installation, contribution and release-process documentation.
+
+### Changed
+
+- Package summary now emphasizes schema-aware inference composition, unified outputs and
+  heterogeneous ensembles.
+
+## [0.2.0a1] - 2026-08-03
 
 ### Added
 
