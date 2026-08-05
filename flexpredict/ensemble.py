@@ -20,7 +20,16 @@ Aggregation = str | Callable[[np.ndarray], np.ndarray]
 
 
 class EnsemblePredictor:
-    """Combine compatible predictions produced by multiple predictors."""
+    """Combine compatible predictions produced by multiple predictors.
+
+    Args:
+        predictors: Predictor-like objects defining ``predict(data)``.
+        aggregation: Built-in strategy name or callable accepting stacked values with shape
+            ``(n_predictors, n_samples, n_outputs)``.
+        aggregation_weights: Global member weights or a safe ``.npy`` file. Valid only for
+            ``weighted_mean``.
+        name: Model name stored in the aggregate result.
+    """
 
     def __init__(
         self,
@@ -73,9 +82,13 @@ class EnsemblePredictor:
         return self._weights
 
     def predict(self, data: Any) -> PredictionResult:
+        """Call every member's ``predict`` method and aggregate compatible results."""
+
         return self._predict_with("predict", data)
 
     def predict_proba(self, data: Any) -> PredictionResult:
+        """Call every member's ``predict_proba`` method and aggregate probabilities."""
+
         return self._predict_with("predict_proba", data)
 
     def _predict_with(self, method_name: str, data: Any) -> PredictionResult:

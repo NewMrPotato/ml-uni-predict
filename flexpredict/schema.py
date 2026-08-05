@@ -26,6 +26,12 @@ MISSING = _Missing()
 
 @dataclass(frozen=True, slots=True)
 class FeatureSpec:
+    """Validation and conversion rules for one named input feature.
+
+    Validators run after optional coercion. Returning ``False`` rejects the value; returning
+    ``True`` or ``None`` accepts it.
+    """
+
     name: str
     dtype: Any = float
     required: bool = True
@@ -108,6 +114,14 @@ class InputBatch:
 
 @dataclass(frozen=True, slots=True)
 class InputSchema:
+    """Ordered contract for named or positional model input.
+
+    Args:
+        features: Non-empty sequence of uniquely named feature specifications.
+        extra_fields: Reject or ignore undeclared fields in named inputs.
+        coerce: Convert values with each feature's ``dtype`` before validation.
+    """
+
     features: tuple[FeatureSpec, ...]
     extra_fields: Literal["forbid", "ignore"] = "forbid"
     coerce: bool = True
@@ -131,6 +145,8 @@ class InputSchema:
         dtype: Any = float,
         extra_fields: Literal["forbid", "ignore"] = "forbid",
     ) -> InputSchema:
+        """Create a uniform schema from an ordered sequence of feature names."""
+
         return cls(
             tuple(FeatureSpec(name=name, dtype=dtype) for name in names),
             extra_fields=extra_fields,
@@ -138,9 +154,13 @@ class InputSchema:
 
     @property
     def feature_names(self) -> tuple[str, ...]:
+        """Declared feature names in model input order."""
+
         return tuple(feature.name for feature in self.features)
 
     def process(self, data: Any) -> InputBatch:
+        """Validate supported input data and return a two-dimensional batch."""
+
         if _is_pandas_dataframe(data):
             return self._process_dataframe(data)
         if _is_pandas_object(data):

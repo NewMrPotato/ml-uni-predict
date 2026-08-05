@@ -40,6 +40,12 @@ dev = [
     "ruff>=0.5",
     "twine>=5.0",
 ]
+docs = [
+    "furo>=2024.8.6",
+    "myst-parser>=3.0",
+    "sphinx>=7.4",
+    "sphinx-copybutton>=0.5.2",
+]
 all = [
     "scikit-learn>=1.2",
     "joblib>=1.2",
@@ -50,6 +56,7 @@ all = [
 
 [project.urls]
 Homepage = "https://github.com/NewMrPotato/ml-flex-predict"
+Documentation = "https://newmrpotato.github.io/ml-flex-predict/"
 Repository = "https://github.com/NewMrPotato/ml-flex-predict"
 Issues = "https://github.com/NewMrPotato/ml-flex-predict/issues"
 

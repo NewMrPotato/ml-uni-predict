@@ -12,6 +12,12 @@ from .exceptions import ConfigurationError, PreprocessingError
 
 @dataclass(frozen=True, slots=True)
 class Standardizer:
+    """Apply fixed column-wise standardization with ``(X - mean) / std``.
+
+    ``mean`` and ``std`` must be finite one-dimensional arrays of equal non-zero length.
+    Standard deviations must be strictly positive.
+    """
+
     mean: np.ndarray
     std: np.ndarray
 
@@ -30,6 +36,8 @@ class Standardizer:
         object.__setattr__(self, "std", std_array)
 
     def transform(self, values: np.ndarray) -> np.ndarray:
+        """Standardize a two-dimensional batch with the configured feature width."""
+
         array = np.asarray(values, dtype=float)
         if array.ndim != 2 or array.shape[1] != self.mean.size:
             raise PreprocessingError(

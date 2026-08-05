@@ -74,10 +74,14 @@ class PredictionResult:
 
     @property
     def n_samples(self) -> int:
+        """Number of predictions in the batch."""
+
         return int(self.values.shape[0])
 
     @property
     def n_outputs(self) -> int:
+        """Number of output columns per sample."""
+
         return int(self.values.shape[1])
 
     def single(self) -> Any:

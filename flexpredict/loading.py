@@ -67,7 +67,11 @@ def load_torch_state_dict(
     map_location: Any = "cpu",
     load_options: dict[str, Any] | None = None,
 ) -> Any:
-    """Create a PyTorch model and load a weights-only checkpoint into it."""
+    """Create a PyTorch model and load a weights-only checkpoint into it.
+
+    Loading defaults to ``weights_only=True`` and ``map_location="cpu"``. A top-level
+    ``state_dict`` entry is selected automatically unless ``state_dict_key`` is supplied.
+    """
 
     if not callable(model_factory):
         raise ConfigurationError("model_factory must be callable.")
@@ -159,4 +163,3 @@ def _import_tensorflow() -> Any:
             "TensorFlow model loading requires: pip install flexpredict[tensorflow]"
         ) from exc
     return tf
-

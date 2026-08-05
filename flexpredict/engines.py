@@ -149,7 +149,11 @@ def register_engine(
     priority: int = 0,
     replace: bool = False,
 ) -> None:
-    """Register an engine factory and an optional auto-detection function."""
+    """Register an engine factory and an optional auto-detection function.
+
+    Higher-priority custom detectors run first and before built-in framework detection.
+    Existing engine names require ``replace=True``.
+    """
 
     if not name or not callable(factory):
         raise ConfigurationError("Engine name and callable factory are required.")

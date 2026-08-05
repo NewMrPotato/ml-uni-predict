@@ -3,12 +3,16 @@
 [![PyPI](https://img.shields.io/pypi/v/flexpredict)](https://pypi.org/project/flexpredict/)
 [![Python](https://img.shields.io/pypi/pyversions/flexpredict)](https://pypi.org/project/flexpredict/)
 [![CI](https://github.com/NewMrPotato/ml-flex-predict/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NewMrPotato/ml-flex-predict/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-3157c8)](https://newmrpotato.github.io/ml-flex-predict/)
 [![License](https://img.shields.io/pypi/l/flexpredict)](https://github.com/NewMrPotato/ml-flex-predict/blob/main/LICENSE)
 
 FlexPredict is a schema-aware inference composition layer for Python with unified outputs,
 preprocessing, model loading and heterogeneous ensemble support. It gives NumPy,
 scikit-learn-compatible, PyTorch, TensorFlow/Keras and custom models a consistent input and
 output contract while allowing every model to keep its own schema and preprocessing pipeline.
+
+Read the [full documentation](https://newmrpotato.github.io/ml-flex-predict/) for input
+contracts, framework integrations, model loading, custom engines, ensembles and API details.
 
 > The current public release is [0.2.0a1](https://pypi.org/project/flexpredict/0.2.0a1/).
 > FlexPredict 0.2 is an alpha redesign and intentionally does not preserve the old

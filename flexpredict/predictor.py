@@ -22,7 +22,21 @@ from .schema import InputSchema, process_untyped_array
 
 
 class Predictor:
-    """Compose input handling, preprocessing and model inference."""
+    """Compose input handling, preprocessing and model inference.
+
+    Args:
+        model: Framework model or custom object executed by the inference engine.
+        features: Ordered feature names to select from named input. Extra fields are ignored.
+        schema: Explicit input contract. Mutually exclusive with ``features``.
+        preprocessor: Callable or object providing ``transform(X)``.
+        task: Prediction semantics. Inferred for sklearn-compatible models when omitted.
+        output_kind: Meaning of regular model output. Defaults to labels for inferred
+            classifiers and values otherwise.
+        engine: Registered engine name, an engine instance, or ``"auto"``.
+        engine_options: Keyword arguments passed to the selected engine factory.
+        output_selector: Key, index or callable used to select one native model output.
+        name: Human-readable model name used in results and ensemble failures.
+    """
 
     def __init__(
         self,
@@ -76,7 +90,11 @@ class Predictor:
         loader_options: dict[str, Any] | None = None,
         **predictor_options: Any,
     ) -> Predictor:
-        """Load a complete model artifact and create a predictor."""
+        """Load a complete model artifact and create a predictor.
+
+        ``loader_options`` are forwarded to the artifact loader. Remaining keyword
+        arguments are forwarded to the predictor constructor.
+        """
 
         from .loading import load_model
 
@@ -94,7 +112,11 @@ class Predictor:
         load_options: dict[str, Any] | None = None,
         **predictor_options: Any,
     ) -> Predictor:
-        """Create a PyTorch model from a factory and apply a state dict."""
+        """Create a PyTorch model from a factory and apply a state dict.
+
+        The checkpoint defaults to weights-only loading. ``state_dict_key`` selects a nested
+        checkpoint entry; a top-level ``state_dict`` entry is recognized automatically.
+        """
 
         from .loading import load_torch_state_dict
 
@@ -111,6 +133,8 @@ class Predictor:
         return cls(model, **predictor_options)
 
     def predict(self, data: Any) -> PredictionResult:
+        """Validate input, run regular inference and return a canonical result."""
+
         batch = self._prepare(data)
         raw = self._engine.predict(batch.values)
         values = normalize_output(raw, n_samples=batch.n_samples)
@@ -124,6 +148,8 @@ class Predictor:
         )
 
     def predict_proba(self, data: Any) -> PredictionResult:
+        """Return classification probabilities for one sample or a batch."""
+
         if self.task not in {"classification", "unknown"}:
             raise ConfigurationError("predict_proba() is valid only for classification models.")
         batch = self._prepare(data)
